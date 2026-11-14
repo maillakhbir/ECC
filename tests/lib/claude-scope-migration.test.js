@@ -232,6 +232,24 @@ test('a missing marketplace is added at the destination before plugin installati
   });
 });
 
+test('ECC_MARKETPLACE_REPO makes migration add the fork marketplace', () => {
+  const previous = process.env.ECC_MARKETPLACE_REPO;
+  process.env.ECC_MARKETPLACE_REPO = 'maillakhbir/ECC';
+  try {
+    withFixture({ plugins: [plugin('user')] }, fixture => {
+      migrateClaudePluginScope(migrationOptions(fixture, 'project'));
+      assert.ok(readCalls(fixture).some(argv => JSON.stringify(argv) === JSON.stringify([
+        'plugin', 'marketplace', 'add',
+        'https://github.com/maillakhbir/ECC',
+        '--scope', 'project',
+      ])));
+    });
+  } finally {
+    if (previous === undefined) delete process.env.ECC_MARKETPLACE_REPO;
+    else process.env.ECC_MARKETPLACE_REPO = previous;
+  }
+});
+
 test('an interrupted source-plus-destination state resumes cleanup without reinstalling', () => {
   withFixture({
     plugins: [plugin('user'), plugin('project', { version: '2.0.0' })],
