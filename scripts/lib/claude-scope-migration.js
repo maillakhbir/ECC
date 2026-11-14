@@ -6,7 +6,6 @@ const path = require('path');
 const {
   ClaudeSetupError,
   CURRENT_PLUGIN_ID,
-  OFFICIAL_MARKETPLACE_URL,
   VALID_HOOK_MODES,
   VALID_SCOPES,
   assertNoConflictingEccPlugins,
@@ -19,6 +18,8 @@ const {
   ensurePluginAtScope,
   hookOptions,
   isOfficialMarketplace,
+  marketplaceCollisionMessage,
+  resolveMarketplaceSource,
   needsClaudeCommitAttributionPreferenceWrite,
   parseMarketplaceList,
   parsePluginList,
@@ -375,7 +376,7 @@ function migrateClaudePluginScope(options = {}, dependencies = {}) {
   if (namedMarketplace && !isOfficialMarketplace(namedMarketplace)) {
     throw migrationError(
       'MARKETPLACE_COLLISION',
-      'Refusing the `ecc` marketplace collision because it is not the official affaan-m/ECC source.',
+      marketplaceCollisionMessage(),
       {
         phase: 'marketplace-inventory',
         observedScopes: migration.observedScopes,
@@ -424,7 +425,7 @@ function migrateClaudePluginScope(options = {}, dependencies = {}) {
       ? ['plugin', 'marketplace', 'update', 'ecc']
       : [
         'plugin', 'marketplace', 'add',
-        OFFICIAL_MARKETPLACE_URL,
+        resolveMarketplaceSource().url,
         '--scope', options.scope,
       ];
   }

@@ -139,7 +139,7 @@ if (args[0] === 'plugin' && args[1] === 'marketplace' && args[2] === 'add') {
     {
       name: 'ecc',
       source: 'github',
-      repo: 'affaan-m/ECC',
+      repo: (/^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/.exec(source) || [])[1] || 'affaan-m/ECC',
       url: source,
       scope,
     },

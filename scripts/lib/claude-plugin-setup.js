@@ -22,6 +22,8 @@ const {
 const OFFICIAL_MARKETPLACE_NAME = 'ecc';
 const OFFICIAL_MARKETPLACE_REPO = 'affaan-m/ecc';
 const OFFICIAL_MARKETPLACE_URL = 'https://github.com/affaan-m/ECC';
+const MARKETPLACE_REPO_ENV = 'ECC_MARKETPLACE_REPO';
+const GITHUB_REPO_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
 const PROVIDER_COMMAND_TIMEOUT_MS = 120 * 1000;
 const VALID_SCOPES = new Set(['user', 'project', 'local']);
 const VALID_HOOK_MODES = new Set(['off', 'minimal', 'standard', 'strict']);
@@ -60,6 +62,33 @@ function normalizeGitHubRepository(value) {
   return match ? match[1].toLowerCase() : null;
 }
 
+/**
+ * Resolve the GitHub repository that counts as the trusted `ecc` marketplace.
+ * Forks can set ECC_MARKETPLACE_REPO=owner/repo; invalid values fall back to
+ * the official affaan-m/ECC source.
+ */
+function resolveMarketplaceSource(env = process.env) {
+  const raw = typeof env[MARKETPLACE_REPO_ENV] === 'string'
+    ? env[MARKETPLACE_REPO_ENV].trim()
+    : '';
+  if (raw && GITHUB_REPO_PATTERN.test(raw) && !raw.split('/')[1].startsWith('.')) {
+    return {
+      repo: raw.toLowerCase(),
+      displayRepo: raw,
+      url: `https://github.com/${raw}`,
+    };
+  }
+  return {
+    repo: OFFICIAL_MARKETPLACE_REPO,
+    displayRepo: 'affaan-m/ECC',
+    url: OFFICIAL_MARKETPLACE_URL,
+  };
+}
+
+function marketplaceCollisionMessage(env = process.env) {
+  return `Refusing the \`ecc\` marketplace collision because it is not the expected ${resolveMarketplaceSource(env).displayRepo} source.`;
+}
+
 function normalizeMarketplaceRepository(marketplace) {
   return marketplace?.source === 'github'
     ? normalizeGitHubRepository(marketplace.repo)
@@ -68,7 +97,7 @@ function normalizeMarketplaceRepository(marketplace) {
 
 function isOfficialMarketplace(marketplace) {
   if (!marketplace || marketplace.name !== OFFICIAL_MARKETPLACE_NAME) return false;
-  return normalizeMarketplaceRepository(marketplace) === OFFICIAL_MARKETPLACE_REPO;
+  return normalizeMarketplaceRepository(marketplace) === resolveMarketplaceSource().repo;
 }
 
 function parseJsonArray(stdout, label) {
@@ -505,10 +534,7 @@ function ensureOfficialMarketplace(options) {
   const run = options.run || runClaude;
   const existing = options.marketplaces.find(entry => entry?.name === OFFICIAL_MARKETPLACE_NAME);
   if (existing && !isOfficialMarketplace(existing)) {
-    fail(
-      'MARKETPLACE_COLLISION',
-      'Refusing the `ecc` marketplace collision because it is not the official affaan-m/ECC source.'
-    );
+    fail('MARKETPLACE_COLLISION', marketplaceCollisionMessage());
   }
 
   if (existing) {
@@ -520,7 +546,7 @@ function ensureOfficialMarketplace(options) {
     run(
       [
         'plugin', 'marketplace', 'add',
-        OFFICIAL_MARKETPLACE_URL,
+        resolveMarketplaceSource().url,
         '--scope', options.scope,
       ],
       { cwd: options.projectRoot, phase: 'marketplace' }
@@ -630,10 +656,7 @@ function setupClaudePlugin(options = {}, dependencies = {}) {
     entry?.name === OFFICIAL_MARKETPLACE_NAME
   ));
   if (namedMarketplace && !isOfficialMarketplace(namedMarketplace)) {
-    fail(
-      'MARKETPLACE_COLLISION',
-      'Refusing the `ecc` marketplace collision because it is not the official affaan-m/ECC source.'
-    );
+    fail('MARKETPLACE_COLLISION', marketplaceCollisionMessage());
   }
 
   if (options.dryRun) {
@@ -691,6 +714,7 @@ function setupClaudePlugin(options = {}, dependencies = {}) {
 module.exports = {
   ClaudeSetupError,
   CURRENT_PLUGIN_ID,
+  MARKETPLACE_REPO_ENV,
   OFFICIAL_MARKETPLACE_NAME,
   OFFICIAL_MARKETPLACE_URL,
   PROVIDER_COMMAND_TIMEOUT_MS,
@@ -708,10 +732,12 @@ module.exports = {
   hookOptions,
   inspectPluginInventory,
   isOfficialMarketplace,
+  marketplaceCollisionMessage,
   parseMarketplaceList,
   parsePluginList,
   readStoredHookOptions,
   readSettings,
+  resolveMarketplaceSource,
   runClaude,
   setupClaudePlugin,
   verifyPluginAtScope,

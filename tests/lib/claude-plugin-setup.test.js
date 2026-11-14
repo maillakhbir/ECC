@@ -11,7 +11,9 @@ const fakeClaudeScript = path.join(repoRoot, 'tests', 'fixtures', 'fake-claude-p
 const {
   OFFICIAL_MARKETPLACE_URL,
   buildWindowsCommandLine,
+  MARKETPLACE_REPO_ENV,
   isOfficialMarketplace,
+  resolveMarketplaceSource,
   runClaude,
   setupClaudePlugin,
 } = require('../../scripts/lib/claude-plugin-setup');
@@ -231,6 +233,76 @@ test('marketplace provenance is validated according to its source type', () => {
       url,
     }), false);
   }
+});
+
+function withMarketplaceRepo(value, fn) {
+  const previous = process.env[MARKETPLACE_REPO_ENV];
+  try {
+    if (value === undefined) delete process.env[MARKETPLACE_REPO_ENV];
+    else process.env[MARKETPLACE_REPO_ENV] = value;
+    return fn();
+  } finally {
+    if (previous === undefined) delete process.env[MARKETPLACE_REPO_ENV];
+    else process.env[MARKETPLACE_REPO_ENV] = previous;
+  }
+}
+
+test('marketplace source defaults to the official repository', () => {
+  withMarketplaceRepo(undefined, () => {
+    assert.deepStrictEqual(resolveMarketplaceSource(), {
+      repo: 'affaan-m/ecc',
+      displayRepo: 'affaan-m/ECC',
+      url: OFFICIAL_MARKETPLACE_URL,
+    });
+  });
+});
+
+test('ECC_MARKETPLACE_REPO overrides the marketplace source for forks', () => {
+  withMarketplaceRepo('maillakhbir/ECC', () => {
+    assert.deepStrictEqual(resolveMarketplaceSource(), {
+      repo: 'maillakhbir/ecc',
+      displayRepo: 'maillakhbir/ECC',
+      url: 'https://github.com/maillakhbir/ECC',
+    });
+    assert.strictEqual(isOfficialMarketplace({
+      name: 'ecc',
+      source: 'git',
+      url: 'https://github.com/maillakhbir/ECC.git',
+    }), true);
+    assert.strictEqual(isOfficialMarketplace(officialMarketplace()), false);
+  });
+});
+
+test('invalid ECC_MARKETPLACE_REPO values fall back to the official repository', () => {
+  for (const value of ['', '   ', 'not-a-repo', 'https://github.com/x/y', 'a/b/c', '../evil']) {
+    withMarketplaceRepo(value, () => {
+      assert.strictEqual(resolveMarketplaceSource().repo, 'affaan-m/ecc', `value: ${JSON.stringify(value)}`);
+    });
+  }
+});
+
+test('fresh install with ECC_MARKETPLACE_REPO adds the fork marketplace', () => {
+  withMarketplaceRepo('maillakhbir/ECC', () => {
+    withFixture({}, fixture => {
+      const result = setupClaudePlugin(setupOptions(fixture, { scope: 'project' }));
+      assert.strictEqual(result.action, 'installed');
+      assert.deepStrictEqual(
+        readCalls(fixture).find(call => call[2] === 'add'),
+        ['plugin', 'marketplace', 'add', 'https://github.com/maillakhbir/ECC', '--scope', 'project']
+      );
+    });
+  });
+});
+
+test('marketplace collision message names the expected repository', () => {
+  withMarketplaceRepo('maillakhbir/ECC', () => {
+    withFixture({ marketplaces: [officialMarketplace()] }, fixture => {
+      assertThrowsContaining(
+        () => setupClaudePlugin(setupOptions(fixture, { scope: 'user' })),
+        ['maillakhbir/ECC']
+      );
+    });
+  });
 });
 
 test('fresh installs require an explicit scope and perform no mutation', () => {

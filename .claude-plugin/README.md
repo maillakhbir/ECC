@@ -4,6 +4,16 @@ If you plan to edit `.claude-plugin/plugin.json`, be aware that the Claude plugi
 
 These constraints are not obvious from public examples and have caused repeated installation failures in the past. They are documented in detail in `.claude-plugin/PLUGIN_SCHEMA_NOTES.md`, which should be reviewed before making any changes to the plugin manifest.
 
+### Installing From a Fork
+
+`ecc setup` only trusts the official `affaan-m/ECC` marketplace by default and refuses any other source registered as `ecc`. To load the plugin from your own fork, set `ECC_MARKETPLACE_REPO` to the fork's `owner/repo`:
+
+```bash
+ECC_MARKETPLACE_REPO=your-name/ECC npx ecc-universal setup --mode claude-plugin --scope project --hooks standard --yes
+```
+
+Setup then adds and verifies `https://github.com/your-name/ECC` as the `ecc` marketplace. Invalid values fall back to the official source. Claude Code clones the fork's default branch, so merge your changes there before reinstalling. If `ecc` is already registered from another source, run `/plugin marketplace remove ecc` first.
+
 ### Custom Endpoints and Gateways
 
 ECC does not override Claude Code transport settings. If Claude Code is configured to run through an official LLM gateway or a compatible custom endpoint, the plugin continues to work because hooks, skills, and any retained legacy command shims execute locally after the CLI starts successfully.
